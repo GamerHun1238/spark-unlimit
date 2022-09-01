@@ -55,5 +55,5 @@ def determinePatchVersion() {
     }
     tagInfo = tagInfo.toString()
 
-    return tagInfo.contains('-') ? tagInfo.split("-")[1] : 0
+    return "33"
 }
