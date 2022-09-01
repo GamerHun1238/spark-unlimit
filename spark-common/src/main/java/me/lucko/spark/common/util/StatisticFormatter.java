@@ -52,7 +52,7 @@ public enum StatisticFormatter {
             color = RED;
         }
 
-        return text((tps > 20.0 ? "*" : "") + Math.min(Math.round(tps * 100.0) / 100.0, 20.0), color);
+        return text(MathMath.round(tps * 100.0) / 100.0, color);
     }
 
     public static TextComponent formatTickDurations(RollingAverage average) {
