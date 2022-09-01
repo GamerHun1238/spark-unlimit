@@ -52,7 +52,7 @@ public enum StatisticFormatter {
             color = RED;
         }
 
-        return text(MathMath.round(tps * 100.0) / 100.0, color);
+        return text(Math.round(tps * 100.0) / 100.0, color);
     }
 
     public static TextComponent formatTickDurations(RollingAverage average) {
