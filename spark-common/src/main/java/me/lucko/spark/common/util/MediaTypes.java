@@ -18,35 +18,12 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package me.lucko.spark.common.sampler;
+package me.lucko.spark.common.util;
 
-import me.lucko.spark.common.sampler.node.ThreadNode;
+public enum MediaTypes {
+    ;
 
-import java.util.Comparator;
-
-/**
- * Methods of ordering {@link ThreadNode}s in the output data.
- */
-public enum ThreadNodeOrder implements Comparator<ThreadNode> {
-
-    /**
-     * Order by the name of the thread (alphabetically)
-     */
-    BY_NAME {
-        @Override
-        public int compare(ThreadNode o1, ThreadNode o2) {
-            return o1.getThreadLabel().compareTo(o2.getThreadLabel());
-        }
-    },
-
-    /**
-     * Order by the time taken by the thread (most time taken first)
-     */
-    BY_TIME {
-        @Override
-        public int compare(ThreadNode o1, ThreadNode o2) {
-            return -Double.compare(o1.getTotalTime(), o2.getTotalTime());
-        }
-    }
+    public static final String SPARK_SAMPLER_MEDIA_TYPE = "application/x-spark-sampler";
+    public static final String SPARK_HEAP_MEDIA_TYPE = "application/x-spark-heap";
 
 }

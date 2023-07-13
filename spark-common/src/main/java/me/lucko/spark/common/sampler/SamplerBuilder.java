@@ -23,6 +23,7 @@ package me.lucko.spark.common.sampler;
 import me.lucko.spark.common.SparkPlatform;
 import me.lucko.spark.common.sampler.async.AsyncProfilerAccess;
 import me.lucko.spark.common.sampler.async.AsyncSampler;
+import me.lucko.spark.common.sampler.async.SampleCollector;
 import me.lucko.spark.common.sampler.java.JavaSampler;
 import me.lucko.spark.common.tick.TickHook;
 
@@ -34,11 +35,14 @@ import java.util.concurrent.TimeUnit;
 @SuppressWarnings("UnusedReturnValue")
 public class SamplerBuilder {
 
-    private double samplingInterval = 4; // milliseconds
+    private SamplerMode mode = SamplerMode.EXECUTION;
+    private double samplingInterval = -1;
     private boolean ignoreSleeping = false;
     private boolean ignoreNative = false;
     private boolean useAsyncProfiler = true;
-    private long timeout = -1;
+    private boolean allocLiveOnly = false;
+    private long autoEndTime = -1;
+    private boolean background = false;
     private ThreadDumper threadDumper = ThreadDumper.ALL;
     private ThreadGrouper threadGrouper = ThreadGrouper.BY_NAME;
 
@@ -46,6 +50,11 @@ public class SamplerBuilder {
     private TickHook tickHook = null;
 
     public SamplerBuilder() {
+    }
+
+    public SamplerBuilder mode(SamplerMode mode) {
+        this.mode = mode;
+        return this;
     }
 
     public SamplerBuilder samplingInterval(double samplingInterval) {
@@ -57,7 +66,12 @@ public class SamplerBuilder {
         if (timeout <= 0) {
             throw new IllegalArgumentException("timeout > 0");
         }
-        this.timeout = System.currentTimeMillis() + unit.toMillis(timeout);
+        this.autoEndTime = System.currentTimeMillis() + unit.toMillis(timeout);
+        return this;
+    }
+
+    public SamplerBuilder background(boolean background) {
+        this.background = background;
         return this;
     }
 
@@ -92,16 +106,42 @@ public class SamplerBuilder {
         return this;
     }
 
-    public Sampler start(SparkPlatform platform) {
-        int intervalMicros = (int) (this.samplingInterval * 1000d);
+    public SamplerBuilder allocLiveOnly(boolean allocLiveOnly) {
+        this.allocLiveOnly = allocLiveOnly;
+        return this;
+    }
+
+    public Sampler start(SparkPlatform platform) throws UnsupportedOperationException {
+        if (this.samplingInterval <= 0) {
+            throw new IllegalArgumentException("samplingInterval = " + this.samplingInterval);
+        }
+
+        boolean onlyTicksOverMode = this.ticksOver != -1 && this.tickHook != null;
+        boolean canUseAsyncProfiler = this.useAsyncProfiler &&
+                !onlyTicksOverMode &&
+                !(this.ignoreSleeping || this.ignoreNative) &&
+                AsyncProfilerAccess.getInstance(platform).checkSupported(platform);
+
+        if (this.mode == SamplerMode.ALLOCATION && (!canUseAsyncProfiler || !AsyncProfilerAccess.getInstance(platform).checkAllocationProfilingSupported(platform))) {
+            throw new UnsupportedOperationException("Allocation profiling is not supported on your system. Check the console for more info.");
+        }
+
+        int interval = (int) (this.mode == SamplerMode.EXECUTION ?
+                this.samplingInterval * 1000d : // convert to microseconds
+                this.samplingInterval
+        );
+
+        SamplerSettings settings = new SamplerSettings(interval, this.threadDumper, this.threadGrouper, this.autoEndTime, this.background);
 
         Sampler sampler;
-        if (this.ticksOver != -1 && this.tickHook != null) {
-            sampler = new JavaSampler(platform, intervalMicros, this.threadDumper, this.threadGrouper, this.timeout, this.ignoreSleeping, this.ignoreNative, this.tickHook, this.ticksOver);
-        } else if (this.useAsyncProfiler && !(this.threadDumper instanceof ThreadDumper.Regex) && AsyncProfilerAccess.INSTANCE.checkSupported(platform)) {
-            sampler = new AsyncSampler(platform, intervalMicros, this.threadDumper, this.threadGrouper, this.timeout);
+        if (this.mode == SamplerMode.ALLOCATION) {
+            sampler = new AsyncSampler(platform, settings, new SampleCollector.Allocation(interval, this.allocLiveOnly));
+        } else if (canUseAsyncProfiler) {
+            sampler = new AsyncSampler(platform, settings, new SampleCollector.Execution(interval));
+        } else if (onlyTicksOverMode) {
+            sampler = new JavaSampler(platform, settings, this.ignoreSleeping, this.ignoreNative, this.tickHook, this.ticksOver);
         } else {
-            sampler = new JavaSampler(platform, intervalMicros, this.threadDumper, this.threadGrouper, this.timeout, this.ignoreSleeping, this.ignoreNative);
+            sampler = new JavaSampler(platform, settings, this.ignoreSleeping, this.ignoreNative);
         }
 
         sampler.start();

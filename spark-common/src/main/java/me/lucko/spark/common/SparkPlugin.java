@@ -23,15 +23,20 @@ package me.lucko.spark.common;
 import me.lucko.spark.api.Spark;
 import me.lucko.spark.common.command.sender.CommandSender;
 import me.lucko.spark.common.monitor.ping.PlayerPingProvider;
+import me.lucko.spark.common.monitor.tick.TickStatistics;
+import me.lucko.spark.common.platform.MetadataProvider;
 import me.lucko.spark.common.platform.PlatformInfo;
 import me.lucko.spark.common.platform.serverconfig.ServerConfigProvider;
 import me.lucko.spark.common.platform.world.WorldInfoProvider;
 import me.lucko.spark.common.sampler.ThreadDumper;
+import me.lucko.spark.common.sampler.source.ClassSourceLookup;
+import me.lucko.spark.common.sampler.source.SourceMetadata;
 import me.lucko.spark.common.tick.TickHook;
 import me.lucko.spark.common.tick.TickReporter;
-import me.lucko.spark.common.util.ClassSourceLookup;
 
 import java.nio.file.Path;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.logging.Level;
 import java.util.stream.Stream;
 
@@ -124,12 +129,33 @@ public interface SparkPlugin {
     }
 
     /**
+     * Creates tick statistics for the platform, if supported.
+     *
+     * <p>Spark is able to provide a default implementation for platforms that
+     * provide a {@link TickHook} and {@link TickReporter}.</p>
+     *
+     * @return a new tick statistics instance
+     */
+    default TickStatistics createTickStatistics() {
+        return null;
+    }
+
+    /**
      * Creates a class source lookup function.
      *
      * @return the class source lookup function
      */
     default ClassSourceLookup createClassSourceLookup() {
         return ClassSourceLookup.NO_OP;
+    }
+
+    /**
+     * Gets a list of known sources (plugins/mods) on the platform.
+     *
+     * @return a list of sources
+     */
+    default Collection<SourceMetadata> getKnownSources() {
+        return Collections.emptyList();
     }
 
     /**
@@ -149,7 +175,16 @@ public interface SparkPlugin {
      * @return the server config provider function
      */
     default ServerConfigProvider createServerConfigProvider() {
-        return ServerConfigProvider.NO_OP;
+        return null;
+    }
+
+    /**
+     * Creates a metadata provider for the platform.
+     *
+     * @return the platform extra metadata provider
+     */
+    default MetadataProvider createExtraMetadataProvider() {
+        return null;
     }
 
     /**

@@ -22,9 +22,9 @@ package me.lucko.spark.common.sampler.async;
 
 import com.google.common.collect.ImmutableTable;
 import com.google.common.collect.Table;
+import com.google.common.io.ByteStreams;
 
 import me.lucko.spark.common.SparkPlatform;
-import me.lucko.spark.common.util.TemporaryFiles;
 
 import one.profiler.AsyncProfiler;
 import one.profiler.Events;
@@ -32,36 +32,54 @@ import one.profiler.Events;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 /**
  * Provides a bridge between spark and async-profiler.
  */
-public enum AsyncProfilerAccess {
-    INSTANCE;
+public class AsyncProfilerAccess {
+    private static AsyncProfilerAccess instance;
+
+    // singleton, needs a SparkPlatform for first init
+    public static synchronized AsyncProfilerAccess getInstance(SparkPlatform platform) {
+        if (instance == null) {
+            Objects.requireNonNull(platform, "platform");
+            instance = new AsyncProfilerAccess(platform);
+        }
+        return instance;
+    }
 
     /** An instance of the async-profiler Java API. */
     private final AsyncProfiler profiler;
 
     /** The event to use for profiling */
     private final ProfilingEvent profilingEvent;
+    /** The event to use for allocation profiling */
+    private final ProfilingEvent allocationProfilingEvent;
 
     /** If profiler is null, contains the reason why setup failed */
     private final Exception setupException;
 
-    AsyncProfilerAccess() {
+    AsyncProfilerAccess(SparkPlatform platform) {
         AsyncProfiler profiler;
         ProfilingEvent profilingEvent = null;
+        ProfilingEvent allocationProfilingEvent = null;
         Exception setupException = null;
 
         try {
-            profiler = load();
+            profiler = load(platform);
+
+            if (isEventSupported(profiler, ProfilingEvent.ALLOC, false)) {
+                allocationProfilingEvent = ProfilingEvent.ALLOC;
+            }
+
             if (isEventSupported(profiler, ProfilingEvent.CPU, false)) {
                 profilingEvent = ProfilingEvent.CPU;
             } else if (isEventSupported(profiler, ProfilingEvent.WALL, true)) {
@@ -74,18 +92,23 @@ public enum AsyncProfilerAccess {
 
         this.profiler = profiler;
         this.profilingEvent = profilingEvent;
+        this.allocationProfilingEvent = allocationProfilingEvent;
         this.setupException = setupException;
     }
 
-    public AsyncProfiler getProfiler() {
+    public AsyncProfilerJob startNewProfilerJob() {
         if (this.profiler == null) {
             throw new UnsupportedOperationException("async-profiler not supported", this.setupException);
         }
-        return this.profiler;
+        return AsyncProfilerJob.createNew(this, this.profiler);
     }
 
     public ProfilingEvent getProfilingEvent() {
         return this.profilingEvent;
+    }
+
+    public ProfilingEvent getAllocationProfilingEvent() {
+        return this.allocationProfilingEvent;
     }
 
     public boolean checkSupported(SparkPlatform platform) {
@@ -106,7 +129,16 @@ public enum AsyncProfilerAccess {
         return this.profiler != null;
     }
 
-    private static AsyncProfiler load() throws Exception {
+    public boolean checkAllocationProfilingSupported(SparkPlatform platform) {
+        boolean supported = this.allocationProfilingEvent != null;
+        if (!supported && this.profiler != null) {
+            platform.getPlugin().log(Level.WARNING, "The allocation profiling mode is not supported on your system. This is most likely because Hotspot debug symbols are not available.");
+            platform.getPlugin().log(Level.WARNING, "To resolve, try installing the 'openjdk-11-dbg' or 'openjdk-8-dbg' package using your OS package manager.");
+        }
+        return supported;
+    }
+
+    private static AsyncProfiler load(SparkPlatform platform) throws Exception {
         // check compatibility
         String os = System.getProperty("os.name").toLowerCase(Locale.ROOT).replace(" ", "");
         String arch = System.getProperty("os.arch").toLowerCase(Locale.ROOT);
@@ -135,10 +167,10 @@ public enum AsyncProfilerAccess {
             throw new IllegalStateException("Could not find " + resource + " in spark jar file");
         }
 
-        Path extractPath = TemporaryFiles.create("spark-", "-libasyncProfiler.so.tmp");
+        Path extractPath = platform.getTemporaryFiles().create("spark-", "-libasyncProfiler.so.tmp");
 
-        try (InputStream in = profilerResource.openStream()) {
-            Files.copy(in, extractPath, StandardCopyOption.REPLACE_EXISTING);
+        try (InputStream in = profilerResource.openStream(); OutputStream out = Files.newOutputStream(extractPath)) {
+            ByteStreams.copy(in, out);
         }
 
         // get an instance of async-profiler
@@ -173,7 +205,8 @@ public enum AsyncProfilerAccess {
 
     enum ProfilingEvent {
         CPU(Events.CPU),
-        WALL(Events.WALL);
+        WALL(Events.WALL),
+        ALLOC(Events.ALLOC);
 
         private final String id;
 

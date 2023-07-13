@@ -20,6 +20,10 @@
 
 package me.lucko.spark.common.sampler.async;
 
+import me.lucko.spark.common.sampler.async.jfr.JfrReader;
+
+import java.nio.charset.StandardCharsets;
+
 /**
  * Represents a profile "segment".
  *
@@ -34,13 +38,13 @@ public class ProfileSegment {
     /** The stack trace for this segment */
     private final AsyncStackTraceElement[] stackTrace;
     /** The time spent executing this segment in microseconds */
-    private final long time;
+    private final long value;
 
-    public ProfileSegment(int nativeThreadId, String threadName, AsyncStackTraceElement[] stackTrace, long time) {
+    public ProfileSegment(int nativeThreadId, String threadName, AsyncStackTraceElement[] stackTrace, long value) {
         this.nativeThreadId = nativeThreadId;
         this.threadName = threadName;
         this.stackTrace = stackTrace;
-        this.time = time;
+        this.value = value;
     }
 
     public int getNativeThreadId() {
@@ -55,7 +59,53 @@ public class ProfileSegment {
         return this.stackTrace;
     }
 
-    public long getTime() {
-        return this.time;
+    public long getValue() {
+        return this.value;
     }
+
+    public static ProfileSegment parseSegment(JfrReader reader, JfrReader.Event sample, String threadName, long value) {
+        JfrReader.StackTrace stackTrace = reader.stackTraces.get(sample.stackTraceId);
+        int len = stackTrace.methods.length;
+
+        AsyncStackTraceElement[] stack = new AsyncStackTraceElement[len];
+        for (int i = 0; i < len; i++) {
+            stack[i] = parseStackFrame(reader, stackTrace.methods[i]);
+        }
+
+        return new ProfileSegment(sample.tid, threadName, stack, value);
+    }
+
+    private static AsyncStackTraceElement parseStackFrame(JfrReader reader, long methodId) {
+        AsyncStackTraceElement result = reader.stackFrames.get(methodId);
+        if (result != null) {
+            return result;
+        }
+
+        JfrReader.MethodRef methodRef = reader.methods.get(methodId);
+        JfrReader.ClassRef classRef = reader.classes.get(methodRef.cls);
+
+        byte[] className = reader.symbols.get(classRef.name);
+        byte[] methodName = reader.symbols.get(methodRef.name);
+
+        if (className == null || className.length == 0) {
+            // native call
+            result = new AsyncStackTraceElement(
+                    AsyncStackTraceElement.NATIVE_CALL,
+                    new String(methodName, StandardCharsets.UTF_8),
+                    null
+            );
+        } else {
+            // java method
+            byte[] methodDesc = reader.symbols.get(methodRef.sig);
+            result = new AsyncStackTraceElement(
+                    new String(className, StandardCharsets.UTF_8).replace('/', '.'),
+                    new String(methodName, StandardCharsets.UTF_8),
+                    new String(methodDesc, StandardCharsets.UTF_8)
+            );
+        }
+
+        reader.stackFrames.put(methodId, result);
+        return result;
+    }
+
 }
