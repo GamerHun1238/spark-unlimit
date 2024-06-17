@@ -18,19 +18,19 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package me.lucko.spark.fabric.mixin;
+package me.lucko.spark.neoforge;
 
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.entity.Entity;
+import cpw.mods.modlauncher.TransformingClassLoader;
+import me.lucko.spark.common.sampler.source.ClassSourceLookup;
 
-import net.minecraft.world.entity.ClientEntityManager;
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.gen.Accessor;
+public class NeoForgeClassSourceLookup implements ClassSourceLookup {
 
-@Mixin(ClientWorld.class)
-public interface ClientWorldAccessor {
-
-    @Accessor
-    ClientEntityManager<Entity> getEntityManager();
-
+    @Override
+    public String identify(Class<?> clazz) {
+        if (clazz.getClassLoader() instanceof TransformingClassLoader) {
+            String name = clazz.getModule().getName();
+            return name.equals("forge") || name.equals("minecraft") ? null : name;
+        }
+        return null;
+    }
 }

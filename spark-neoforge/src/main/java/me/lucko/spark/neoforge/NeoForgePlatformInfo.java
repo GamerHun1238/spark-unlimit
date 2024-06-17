@@ -18,19 +18,35 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package me.lucko.spark.fabric.mixin;
+package me.lucko.spark.neoforge;
 
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.entity.Entity;
+import me.lucko.spark.common.platform.PlatformInfo;
+import net.neoforged.fml.loading.FMLLoader;
 
-import net.minecraft.world.entity.ClientEntityManager;
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.gen.Accessor;
+public class NeoForgePlatformInfo implements PlatformInfo {
+    private final Type type;
 
-@Mixin(ClientWorld.class)
-public interface ClientWorldAccessor {
+    public NeoForgePlatformInfo(Type type) {
+        this.type = type;
+    }
 
-    @Accessor
-    ClientEntityManager<Entity> getEntityManager();
+    @Override
+    public Type getType() {
+        return this.type;
+    }
 
+    @Override
+    public String getName() {
+        return "NeoForge";
+    }
+
+    @Override
+    public String getVersion() {
+        return FMLLoader.versionInfo().neoForgeVersion();
+    }
+
+    @Override
+    public String getMinecraftVersion() {
+        return FMLLoader.versionInfo().mcVersion();
+    }
 }

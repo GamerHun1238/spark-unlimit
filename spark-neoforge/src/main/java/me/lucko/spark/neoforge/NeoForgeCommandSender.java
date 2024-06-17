@@ -18,11 +18,10 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package me.lucko.spark.forge;
+package me.lucko.spark.neoforge;
 
 import me.lucko.spark.common.command.sender.AbstractCommandSender;
-import me.lucko.spark.forge.plugin.ForgeSparkPlugin;
-
+import me.lucko.spark.neoforge.plugin.NeoForgeSparkPlugin;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 import net.minecraft.commands.CommandSource;
@@ -36,10 +35,10 @@ import net.minecraft.world.entity.player.Player;
 import java.util.Objects;
 import java.util.UUID;
 
-public class ForgeCommandSender extends AbstractCommandSender<CommandSource> {
-    private final ForgeSparkPlugin plugin;
+public class NeoForgeCommandSender extends AbstractCommandSender<CommandSource> {
+    private final NeoForgeSparkPlugin plugin;
 
-    public ForgeCommandSender(CommandSource source, ForgeSparkPlugin plugin) {
+    public NeoForgeCommandSender(CommandSource source, NeoForgeSparkPlugin plugin) {
         super(source);
         this.plugin = plugin;
     }
